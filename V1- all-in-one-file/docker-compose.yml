@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # Traefik Reverse Proxy
+  traefik:
+    image: traefik:latest
+    container_name: traefik
+    command:
+      - --api.insecure=true
+      - --providers.docker
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+      - "8080:8080"  # Traefik Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik_network
+
+  # WordPress Stack
+  wordpress_db:
+    image: mysql:8.0
+    container_name: wordpress_db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+    volumes:
+      - wordpress_db_data:/var/lib/mysql
+    networks:
+      - wordpress_network
+
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress
+    environment:
+      WORDPRESS_DB_HOST: wordpress_db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      - wordpress_db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.wordpress.rule=Host(`wordpress.local`)"
+      - "traefik.http.routers.wordpress.entrypoints=web"
+    networks:
+      - wordpress_network
+      - traefik_network
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin
+    environment:
+      PMA_HOST: wordpress_db
+      PMA_USER: root
+      PMA_PASSWORD: rootpassword
+    depends_on:
+      - wordpress_db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin.rule=Host(`phpmyadmin.local`)"
+      - "traefik.http.routers.phpmyadmin.entrypoints=web"
+    networks:
+      - wordpress_network
+      - traefik_network
+
+  wordpress_redis:
+    image: redis:latest
+    container_name: wordpress_redis
+    networks:
+      - wordpress_network
+
+  # n8n Stack
+  n8n_db:
+    image: postgres:15
+    container_name: n8n_db
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: n8n
+      POSTGRES_DB: n8n
+    volumes:
+      - n8n_db_data:/var/lib/postgresql/data
+    networks:
+      - n8n_network
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_HOST: n8n_db
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD: n8n
+    depends_on:
+      - n8n_db
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n.rule=Host(`n8n.local`)"
+      - "traefik.http.routers.n8n.entrypoints=web"
+    networks:
+      - n8n_network
+      - traefik_network
+
+  n8n_redis:
+    image: redis:latest
+    container_name: n8n_redis
+    networks:
+      - n8n_network
+
+  # Flowise Stack
+  flowise:
+    image: flowiseai/flowise
+    container_name: flowise
+    environment:
+      PORT: 3000
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.flowise.rule=Host(`flowise.local`)"
+      - "traefik.http.routers.flowise.entrypoints=web"
+    networks:
+      - traefik_network
+
+# Networks
+networks:
+  traefik_network:
+    driver: bridge
+  wordpress_network:
+    driver: bridge
+  n8n_network:
+    driver: bridge
+
+# Volumes
+volumes:
+  wordpress_db_data:
+  wordpress_data:
+  n8n_db_data:
