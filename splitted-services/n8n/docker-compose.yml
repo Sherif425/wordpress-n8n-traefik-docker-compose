@@ -1,0 +1,42 @@
+services:
+  n8n:
+    image: n8nio/n8n
+    environment:
+      - N8N_DB_PASSWORD='a8C1O9d27W4qoc1wBxJ2yQ=='
+      - N8N_REDIS_PASSWORD='OC5JesHP7cnxMJBG6Vi7OA=='
+      - N8N_SECURE_COOKIE=false
+      
+    depends_on:
+      - postgres
+      - redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n.rule=Host(`n8n.local`)"
+      - "traefik.http.routers.n8n.entrypoints=web"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  redis:
+    image: redis:latest
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    name: app-network
+    external: true
